@@ -17,6 +17,29 @@ namespace CowHut.Controllers
         [HttpPost("signup")]
         public IActionResult CreateUser(User user)
         {
+            var allowedroles = new[] { "admin", "seller", "buyer" };
+            var allowedDivisions = new[]{"dhaka", "mymensingh", "khulna", "barisal", "chittagong", "rajshahi", "rangpur", "sylhet"};
+
+            if (string.IsNullOrEmpty(user.PhoneNumber) || !System.Text.RegularExpressions.Regex.IsMatch(user.PhoneNumber, @"^(?:\+8801|01)[3-9]\d{8}$"))
+            {
+                return BadRequest(new { message = "Invalide Phone number format" });
+            }
+            if (string.IsNullOrEmpty(user.Role) || !allowedroles.Contains(user.Role.ToLower()))
+            {
+                return BadRequest(new { message = "Role must be admin, seller, or buyer." });
+            }
+            if (string.IsNullOrEmpty(user.Address) || !allowedDivisions.Contains(user.Address.ToLower()))
+            {
+                return BadRequest(new { message = "Address must be a valid division of Bangladesh." });
+            }
+            if (string.IsNullOrEmpty(user.Password) || !System.Text.RegularExpressions.Regex.IsMatch(user.Password, @"^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{6,}$"))
+            {
+                return BadRequest(new
+                {
+                    message = "Password must contain at least one letter, one number, one special character, and be at least 6 characters long."
+                });
+            }
+
             db.users.Add(user);
             db.SaveChanges();
             return Ok(new
@@ -66,11 +89,12 @@ namespace CowHut.Controllers
             });
         }
 
-        [HttpPatch]
-        public IActionResult UpdateUser(int id, User newuser)
+        [HttpPatch("{id}")]
+        public IActionResult UpdateUser(int id, [FromBody] UpdateUserDto newUser)
         {
+            // 1. Find the existing user
             var user = db.users.Find(id);
-            if(user == null)
+            if (user == null)
             {
                 return NotFound(new
                 {
@@ -79,12 +103,53 @@ namespace CowHut.Controllers
                     message = "User not found"
                 });
             }
+            if (!string.IsNullOrEmpty(newUser.PhoneNumber) &&
+                !System.Text.RegularExpressions.Regex.IsMatch(newUser.PhoneNumber, @"^(?:\+8801|01)[3-9]\d{8}$"))
+            {
+                return BadRequest(new { message = "Invalid phone number format. Must provide valid Bangladeshi phone number " });
+            }
 
-            user.PhoneNumber = newuser.PhoneNumber ?? user.PhoneNumber;
-            user.Role = newuser.Role ?? user.Role;
-            user.Password = newuser.Password ?? user.Password;
-            user.Name = newuser.Name ?? user.Name;
-            user.Address = newuser.Address ?? user.Address;
+            if (!string.IsNullOrEmpty(newUser.Role))
+            {
+                var allowedRoles = new[] { "admin", "seller", "buyer" };
+                if (!allowedRoles.Contains(newUser.Role.ToLower()))
+                    return BadRequest(new { message = "Role must be admin, seller, or buyer." });
+            }
+
+            if (!string.IsNullOrEmpty(newUser.Address))
+            {
+                var allowedDivisions = new[]
+                {
+            "dhaka", "mymensingh", "khulna", "barisal",
+            "chittagong", "rajshahi", "rangpur", "sylhet"
+        };
+                if (!allowedDivisions.Contains(newUser.Address.ToLower()))
+                    return BadRequest(new { message = "Address must be a valid division of Bangladesh." });
+            }
+
+            if (!string.IsNullOrEmpty(newUser.Password) &&
+                !System.Text.RegularExpressions.Regex.IsMatch(newUser.Password, @"^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{6,}$"))
+            {
+                return BadRequest(new
+                {
+                    message = "Password must contain at least one letter, one number, one special character, and be at least 6 characters long."
+                });
+            }
+
+            if (newUser.Name != null)
+                user.Name = newUser.Name;
+
+            if (newUser.PhoneNumber != null)
+                user.PhoneNumber = newUser.PhoneNumber;
+
+            if (newUser.Role != null)
+                user.Role = newUser.Role;
+
+            if (newUser.Address != null)
+                user.Address = newUser.Address;
+
+            if (newUser.Password != null)
+                user.Password = newUser.Password;
 
             db.SaveChanges();
 
@@ -92,10 +157,11 @@ namespace CowHut.Controllers
             {
                 success = true,
                 StatusCode = 200,
-                message = "User Updated Successfully",
+                message = "User updated successfully",
                 data = user
             });
         }
+
 
         [HttpGet("search")]
         public IActionResult SearchUser(
